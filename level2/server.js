@@ -49,7 +49,7 @@ app.get('/get', async (req, res) => {
 });
 
 app.get('/get-with-redis' , async(req , res) => {
-  const cached = await redis.get('')
+  const cached = await redis.get('user:all')
 
     if(cached){
       const user = JSON.parse(cached)
