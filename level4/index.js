@@ -35,17 +35,30 @@ app.use(express.urlencoded({ extended: true }));
 //   });
 // });
 
-// with LangChain
+// with LangChain 
+// ye LLM Call kya langchain me
 
 const llm = new ChatGroq({
   model: "openai/gpt-oss-120b",
-  // apiKey : process.env.GROQ_API_KEY
+  // temperature: 0,
+  // maxTokens: 20,
 });
 
 app.post("/ai", async (req, res) => {
   const { input } = req.body;
 
-  const response = await llm.invoke(input);
+  const response = await llm.invoke([
+    {
+      role: "system",
+      content:
+        "You are an assistant and your name is Jarvis. if you don't know the answer so don't give the wrong answer.",
+    },
+
+    {
+      role: "human",
+      content: input,
+    },
+  ]);
 
   console.log(response.text);
   return res.status(200).json({
