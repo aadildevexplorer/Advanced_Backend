@@ -1,9 +1,12 @@
-// const { GoogleGenAI } = require("@google/genai");
 const express = require("express");
 require("dotenv").config();
-// const { ChatGoogleGenerativeAI } = require("@langchain/google-genai");
 const { ChatGroq } = require("@langchain/groq");
-const { Annotation, StateGraph } = require("@langchain/langgraph");
+const {
+  Annotation,
+  StateGraph,
+  MessagesAnnotation,
+} = require("@langchain/langgraph");
+const { ToolNode } = require("@langchain/langgraph/prebuilt");
 const app = express();
 const PORT = 8080;
 
@@ -49,32 +52,29 @@ const llm = new ChatGroq({
 app.post("/ai", async (req, res) => {
   const { input } = req.body;
 
-  // const response = await llm.invoke([
-  //   {
-  //     role: "system",
-  //     content:
-  //       "You are an assistant and your name is Jarvis. if you don't know the answer so don't give the wrong answer.",
-  //   },
-
-  //   {
-  //     role: "human",
-  //     content: input,
-  //   },
-  // ]);
-
-  const response = await graph.invoke({ prompt: input });
+  const response = await graph.invoke({
+    messages: [
+      {
+        role: "user",
+        content: input,
+      },
+    ],
+  });
 
   console.log(response);
   return res.status(200).json({
-    ai: response.aiMsg,
+    ai: response.messages[response.messages.length-1].content,
   });
 });
 
 // with LangGraph
-const State = Annotation.Root({
-  prompt: Annotation,
-  aiMsg: Annotation,
-});
+// const State = Annotation.Root({
+//   prompt: Annotation,
+//   aiMsg: Annotation,
+// });
+
+const tool = [];
+const toolNode = new ToolNode(tool);
 
 const callLLM = async (state) => {
   console.log("state:=>", state);
@@ -87,23 +87,48 @@ const callLLM = async (state) => {
 
     {
       role: "human",
-      content: state.prompt,
+      content: state.messages[0].content,
     },
   ]);
 
-  return {
-    aiMsg: {
-      prompt: state.prompt,
-      aiMsg: response.content,
-    },
-  };
+  return { messages: [response] };
+
+  // return {
+  //   aiMsg: {
+  //     prompt: state.prompt,
+  //     aiMsg: response.content,
+  //   },
+  // };
 };
 
-const graph = new StateGraph(State)
+const shouldContinue = async (state) => {
+
+    const lastMessage = state.messages[state.messages.length-1]
+    if(lastMessage.tool_calls.length > 0){
+      return 'tools'
+    }else{
+      return '__end__'
+    }
+};
+
+// const graph = new StateGraph(MessagesAnnotation)
+//   .addNode("agent", callLLM)
+//   .addEdge("__start__", "agent")
+//   .addEdge("agent", "__end__")
+//   .addNode('tools' , toolNode)
+//   .addEdge('tools' , 'agent')
+//   .addConditionalEdges('agent' , shouldContinue)
+//   .compile();
+
+
+const graph = new StateGraph(MessagesAnnotation)
   .addNode("agent", callLLM)
+  .addNode("tools", toolNode)
   .addEdge("__start__", "agent")
-  .addEdge("agent", "__end__")
+  .addConditionalEdges("agent", shouldContinue)
+  .addEdge("tools", "agent")
   .compile();
+
 
 app.get("/", (req, res) => {
   res.json({ msg: "AI 0.1" });
@@ -112,12 +137,3 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log("server running");
 });
-
-// Node.js backend mein ek AI API banaye h, jo user ka question lekar LLM
-// se answer generate karwaye aur user ko response return kare.
-
-// LangChain is an open-source software framework designed to help developers build applications powered by large language models (LLMs) like OpenAI's GPT, Anthropic's Claude, or open-source models
-// LangChain ek open-source software framework hai, jo developers ko Large Language Models (LLMs) jaise OpenAI ke GPT, Anthropic ke Claude ya open-source models ka use karke AI-powered applications banane mein help karta hai.
-
-// A Large Language Model (LLM) is a type of artificial intelligence built on deep neural networks that is trained on massive amounts of text to understand, summarize, translate, and generate human-like language.
-// LLM (Large Language Model) ek tarah ki Artificial Intelligence hai, jo Deep Neural Networks par based hoti hai aur bahut saare text data par train ki jaati hai, taaki woh human language ko samajh sake, text ko summarize aur translate kar sake, aur insaanon jaisa text generate kar sake.
